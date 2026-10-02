@@ -1,0 +1,69 @@
+{
+  "name": "billtrix-desktop",
+  "productName": "BillTrix",
+  "version": "1.0.0",
+  "description": "BillTrix Desktop — billing, stock & Boss alerts for Windows",
+  "author": "BillTrix",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --x64"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "app.billtrix.desktop",
+    "productName": "BillTrix",
+    "copyright": "BillTrix",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "offline.html",
+      "build/icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/agent.ps1",
+        "to": "agent.ps1"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "BillTrix-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "BillTrix",
+      "uninstallDisplayName": "BillTrix"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "growsysfoundation",
+        "repo": "billtrix-desktop"
+      }
+    ]
+  }
+}

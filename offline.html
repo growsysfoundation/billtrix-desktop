@@ -1,0 +1,9 @@
+<!doctype html><html lang="hi"><head><meta charset="utf-8"><title>BillTrix — no internet</title>
+<style>body{margin:0;font-family:system-ui,Segoe UI,sans-serif;background:#eef3f1;color:#14231d;display:grid;place-items:center;height:100vh}
+.c{background:#fff;border-radius:18px;padding:30px 34px;max-width:470px;box-shadow:0 10px 30px rgba(0,0,0,.1);text-align:center}
+h1{margin:6px 0 8px;font-size:1.4rem}p{color:#4a5a53;line-height:1.55}button{background:#0F6B4F;color:#fff;border:0;border-radius:12px;padding:12px 24px;font-size:1rem;font-weight:700;cursor:pointer}</style></head>
+<body><div class="c"><div style="font-size:46px">📶</div><h1>इंटरनेट नहीं मिल रहा</h1>
+<p>BillTrix पहली बार खोलने के लिए एक बार इंटरनेट चाहिए। उसके बाद यह बिना इंटरनेट भी चलता है और बिल इसी कंप्यूटर में सेव होते हैं।</p>
+<p style="font-size:.9rem">No internet. Open BillTrix once with internet; after that it works offline too.</p>
+<button onclick="window.billtrixDesktop&&billtrixDesktop.retry()">↻ फिर से कोशिश करें / Try again</button></div>
+<script>setInterval(()=>{if(navigator.onLine&&window.billtrixDesktop)billtrixDesktop.retry()},15000)</script></body></html>
