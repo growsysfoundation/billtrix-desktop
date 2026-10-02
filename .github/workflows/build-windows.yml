@@ -1,0 +1,24 @@
+name: Build BillTrix for Windows
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - name: Build installer (and publish a release when a v* tag is pushed)
+        run: npx electron-builder --win nsis --x64 ${{ startsWith(github.ref, 'refs/tags/v') && '--publish always' || '--publish never' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BillTrix-Setup
+          path: dist/*.exe
