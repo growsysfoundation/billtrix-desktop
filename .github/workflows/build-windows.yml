@@ -1,8 +1,14 @@
 name: Build BillTrix for Windows
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Send this version to all shops (BillTrix server)'
+        type: boolean
+        default: true
 permissions:
   contents: read
+  id-token: write
 jobs:
   build:
     runs-on: windows-latest
@@ -12,8 +18,13 @@ jobs:
         with:
           node-version: 20
       - run: npm install
-      - name: Build installer (updates are served by the BillTrix server, not GitHub)
+      - name: Build installer
         run: npx electron-builder --win nsis --x64 --publish never
+      - name: Publish to the BillTrix server (verified GitHub identity, no password)
+        if: ${{ inputs.publish }}
+        run: node .github/publish.js
+        env:
+          BT_URL: https://billone.upendrakumar-raj.workers.dev
       - uses: actions/upload-artifact@v4
         with:
           name: BillTrix-Setup
