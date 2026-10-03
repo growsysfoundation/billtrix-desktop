@@ -1,7 +1,7 @@
 {
   "name": "billtrix-desktop",
   "productName": "BillTrix",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "BillTrix Desktop — billing, stock & Boss alerts for Windows",
   "author": "BillTrix",
   "main": "main.js",
@@ -60,10 +60,8 @@
     },
     "publish": [
       {
-        "provider": "github",
-        "owner": "growsysfoundation",
-        "repo": "billtrix-desktop",
-        "releaseType": "release"
+        "provider": "generic",
+        "url": "https://billone.upendrakumar-raj.workers.dev/desktop"
       }
     ]
   }
