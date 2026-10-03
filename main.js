@@ -7,6 +7,8 @@ const { spawn } = require('child_process');
 const APP_NAME = 'BillTrix';
 const DEFAULT_URL = 'https://billone.upendrakumar-raj.workers.dev';
 const AGENT_PORT = 18181;
+const HUB_PORT = 18300;
+const { HubServer } = require('./hub/hub-server');
 
 /* ---------- settings kept in %APPDATA%\BillTrix\desktop.json ---------- */
 const CFG_FILE = () => path.join(app.getPath('userData'), 'desktop.json');
@@ -14,6 +16,8 @@ function readCfg() { try { return JSON.parse(fs.readFileSync(CFG_FILE(), 'utf8')
 function writeCfg(c) { try { fs.writeFileSync(CFG_FILE(), JSON.stringify(c, null, 2)); } catch {} }
 const cfg = () => ({ url: DEFAULT_URL, zoom: 0, ...readCfg() });
 const appOrigin = () => new URL(cfg().url).origin;
+const cloudUrl = () => (cfg().cloud || DEFAULT_URL);
+const okOrigins = () => new Set([appOrigin(), new URL(cloudUrl()).origin, `http://localhost:${HUB_PORT}`, `http://127.0.0.1:${HUB_PORT}`]);
 
 /* ---------- one window only ---------- */
 if (!app.requestSingleInstanceLock()) { app.quit(); }
@@ -52,6 +56,55 @@ async function startAgent() {
 function stopAgent() { try { if (agent) agent.kill(); } catch {} agent = null; }
 ipcMain.handle('bt:agent-restart', async () => { stopAgent(); await new Promise((r) => setTimeout(r, 400)); await startAgent(); await new Promise((r) => setTimeout(r, 1500)); return agentAlive(); });
 
+
+/* ---------- Mode C: this computer can be the shop's Local Hub ---------- */
+let hub = null, hubTimer = null;
+function startUrl() { const c = cfg(); const base = (hub ? `http://localhost:${HUB_PORT}` : c.url); return base + (base.includes('?') ? '&' : '?') + 'source=desktop'; }
+async function hubStart(h, syncToken) {
+  hub = new HubServer({ dir: path.join(app.getPath('userData'), 'hub'), port: HUB_PORT, cloud: cloudUrl(), tenantId: h.tenantId, sub: h.sub, syncToken });
+  await hub.listen('0.0.0.0');
+  hubTimer = setInterval(() => hub && hub.syncOnce().catch(() => {}), 5000);
+  hub.syncOnce().catch(() => {});
+}
+async function hubStop() { if (hubTimer) clearInterval(hubTimer); hubTimer = null; if (hub) { await hub.syncOnce().catch(() => {}); hub.store.snapshot(); await hub.close(); } hub = null; }
+ipcMain.handle('bt:hub-status', async () => {
+  if (!hub) return { enabled: false, cfg: cfg().hub || null };
+  return { enabled: true, online: hub.status.online, pending: hub.store.pendingCount(), lastSync: hub.status.lastSync, lastError: hub.status.lastError, addresses: require('./hub/hub-server').hubAddresses(HUB_PORT), sub: hub.o.sub };
+});
+ipcMain.handle('bt:hub-enable', async (_e, a) => {
+  try {
+    if (hub) return { ok: true, already: true };
+    const tenantId = String(a && a.tenantId || ''), sub = String(a && a.sub || '').toLowerCase(), token = String(a && a.token || '');
+    if (!/^[A-Za-z0-9_-]{3,64}$/.test(tenantId) || !token) return { ok: false, error: 'Sign in to the shop first (with internet).' };
+    await hubStart({ tenantId, sub }, token);
+    try { await hub.seed(); } catch (e) { await hubStop(); return { ok: false, error: 'Could not copy the shop from the cloud: ' + (e.message || e) }; }
+    writeCfg({ ...readCfg(), hub: { enabled: true, tenantId, sub, since: Date.now() } });
+    setTimeout(() => win && win.loadURL(startUrl()), 1500);
+    return { ok: true, addresses: require('./hub/hub-server').hubAddresses(HUB_PORT) };
+  } catch (e) { return { ok: false, error: String(e.message || e) + (String(e.code) === 'EADDRINUSE' ? ' (port 18300 is busy)' : '') }; }
+});
+ipcMain.handle('bt:hub-disable', async (_e, a) => {
+  if (!hub) return { ok: true };
+  const pending = hub.store.pendingCount();
+  if (pending && !(a && a.force)) return { ok: false, pending, error: `${pending} change(s) are not in the cloud yet. Connect to the internet first.` };
+  await hubStop(); writeCfg({ ...readCfg(), hub: { ...(readCfg().hub || {}), enabled: false } });
+  setTimeout(() => win && win.loadURL(startUrl()), 500);
+  return { ok: true };
+});
+/* a counter computer: open BillTrix from the shop Hub (or go back to the cloud) */
+ipcMain.handle('bt:set-server', async (_e, u) => {
+  try {
+    const url = new URL(String(u || cloudUrl()));
+    if (!/^https?:$/.test(url.protocol)) throw new Error('Bad address');
+    const r = await net.fetch(url.origin + '/api/health');
+    const j = await r.json();
+    if (!j || j.app !== 'BillOne') throw new Error('No BillTrix at this address');
+    writeCfg({ ...readCfg(), url: url.origin });
+    setTimeout(() => win && win.loadURL(startUrl()), 300);
+    return { ok: true, hub: !!j.hub };
+  } catch (e) { return { ok: false, error: String(e.message || e) }; }
+});
+
 /* ---------- window ---------- */
 function offlinePage() { return path.join(__dirname, 'offline.html'); }
 function createWindow() {
@@ -66,7 +119,7 @@ function createWindow() {
   win.once('ready-to-show', () => { win.maximize(); win.show(); if (c.zoom) wc.setZoomLevel(c.zoom); });
 
   /* links: BillTrix stays inside the app; WhatsApp, maps, mail and other sites open in the normal browser */
-  const inside = (u) => { try { return new URL(u).origin === appOrigin(); } catch { return false; } };
+  const inside = (u) => { try { return okOrigins().has(new URL(u).origin); } catch { return false; } };
   wc.setWindowOpenHandler(({ url }) => {
     if (inside(url) || url === 'about:blank') return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true, icon: path.join(__dirname, 'build', 'icon.png'), webPreferences: { partition: 'persist:billtrix', sandbox: true, contextIsolation: true } } };
     shell.openExternal(url); return { action: 'deny' };
@@ -77,7 +130,7 @@ function createWindow() {
   wc.on('did-fail-load', (_e, code, _desc, url, isMain) => { if (isMain && code !== -3 && !String(url).startsWith('file:')) win.loadFile(offlinePage()); });
   wc.on('zoom-changed', () => setTimeout(() => writeCfg({ ...readCfg(), zoom: wc.getZoomLevel() }), 50));
 
-  win.loadURL(c.url + (c.url.includes('?') ? '&' : '?') + 'source=desktop');
+  win.loadURL(startUrl());
   win.on('closed', () => { win = null; });
 }
 
@@ -85,8 +138,8 @@ function createWindow() {
 function permissions() {
   const s = session.fromPartition('persist:billtrix');
   const ok = new Set(['media', 'notifications', 'clipboard-read', 'clipboard-sanitized-write', 'fullscreen']);
-  s.setPermissionRequestHandler((wc, perm, cb, details) => { let same = false; try { same = new URL(details.requestingUrl || wc.getURL()).origin === appOrigin(); } catch {} cb(same && ok.has(perm)); });
-  s.setPermissionCheckHandler((_wc, perm, origin) => { try { return new URL(origin).origin === appOrigin() && ok.has(perm); } catch { return false; } });
+  s.setPermissionRequestHandler((wc, perm, cb, details) => { let same = false; try { same = okOrigins().has(new URL(details.requestingUrl || wc.getURL()).origin); } catch {} cb(same && ok.has(perm)); });
+  s.setPermissionCheckHandler((_wc, perm, origin) => { try { return okOrigins().has(new URL(origin).origin) && ok.has(perm); } catch { return false; } });
 }
 
 /* ---------- menu (press Alt to see it) ---------- */
@@ -94,7 +147,7 @@ function menu() {
   const startup = () => app.getLoginItemSettings().openAtLogin;
   const tpl = [
     { label: 'BillTrix', submenu: [
-      { label: 'Home', accelerator: 'Alt+Home', click: () => win && win.loadURL(cfg().url + '?source=desktop') },
+      { label: 'Home', accelerator: 'Alt+Home', click: () => win && win.loadURL(startUrl()) },
       { label: 'Reload', accelerator: 'F5', click: () => win && win.webContents.reload() },
       { label: 'Reload (clear cache)', accelerator: 'Ctrl+Shift+R', click: () => win && win.webContents.reloadIgnoringCache() },
       { type: 'separator' },
@@ -133,9 +186,11 @@ app.whenReady().then(async () => {
   permissions();
   menu();
   await startAgent();
+  const hc = cfg().hub;
+  if (hc && hc.enabled) { try { await hubStart(hc, ''); } catch (e) { hub = null; dialog.showErrorBox('BillTrix Hub', 'The shop Hub could not start: ' + (e.message || e)); } }
   createWindow();
   autoUpdate();
 });
-ipcMain.handle('bt:retry', () => { if (win) win.loadURL(cfg().url + '?source=desktop'); });
-app.on('window-all-closed', () => { stopAgent(); app.quit(); });
+ipcMain.handle('bt:retry', () => { if (win) win.loadURL(startUrl()); });
+app.on('window-all-closed', async () => { stopAgent(); await hubStop().catch(() => {}); app.quit(); });
 app.on('before-quit', stopAgent);

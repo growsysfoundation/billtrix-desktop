@@ -1,7 +1,7 @@
 {
   "name": "billtrix-desktop",
   "productName": "BillTrix",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "BillTrix Desktop — billing, stock & Boss alerts for Windows",
   "author": "BillTrix",
   "main": "main.js",
@@ -29,7 +29,9 @@
       "preload.js",
       "offline.html",
       "build/icon.png",
-      "package.json"
+      "package.json",
+      "hub/hub-core.js",
+      "hub/hub-server.js"
     ],
     "extraResources": [
       {

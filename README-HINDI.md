@@ -53,15 +53,14 @@ Features और डेटा cloud से आते हैं, इसलिए �
 
 ---
 
-## Updates
-- **Features:** अपने-आप, cloud से (Releases पेज से नियंत्रित)। कुछ नहीं करना।
-- **Desktop खोल (यह `.exe`)** का update, GitHub Releases से अपने-आप:
-  1. `package.json` में `"owner"` में GitHub नाम `growsysfoundation` पहले से लिखा है
-  2. `"version"` बढ़ाएँ (जैसे `1.0.1`)
-  3. GitHub पर एक **tag** बनाएँ: Releases → **Draft a new release** → Tag `v1.0.1` → Publish
-  4. Actions अपने-आप नया installer बनाकर Release में रखेगा, और दुकानों के app 6 घंटे के भीतर उसे download करके पूछेंगे "**Restart now / Later**"
-
----
+## Updates (अब पूरी तरह अपने-आप)
+- **Features**: अपने-आप, cloud से (Releases पेज से नियंत्रित)।
+- **Desktop खोल (.exe)**:
+  1. GitHub → `package.json` में `"version"` बढ़ाएँ (जैसे `1.0.3`) → Commit
+  2. Actions → **Build BillTrix for Windows** → **Run workflow** (✓ "Send this version to all shops")
+  3. बस! Build ख़ुद installer को **BillTrix server पर भेज देता है** (GitHub की अपनी पहचान से — कोई पासवर्ड/चाबी नहीं), और दुकानों के app अगली बार खुलने पर (या 6 घंटे में) **"Restart now / Later"** पूछेंगे।
+- चाहें तो **Super Admin → Desktop App** से हाथ से भी upload कर सकते हैं।
+- दुकानों के लिए download link: `https://billone.upendrakumar-raj.workers.dev/desktop/download`
 
 ## Server का पता बदलना (जैसे custom domain)
 `%APPDATA%\BillTrix\desktop.json` में यह लिखें:
@@ -69,3 +68,27 @@ Features और डेटा cloud से आते हैं, इसलिए �
 { "url": "https://app.yourdomain.com" }
 ```
 **ध्यान दें:** domain बदलने पर Print Agent में भी नया पता डालना होगा (`resources/agent.ps1` की लाइन `$Allowed = ...`)। यह ज़रूरत पड़ने पर Claude से करवा लें।
+
+---
+
+## 🏠 Shop Hub (बिना इंटरनेट के कई counters) — v1.0.3 से
+**कब काम आता है:** इंटरनेट बार-बार जाता हो, और दुकान में 2 या ज़्यादा counters हों।
+
+**Hub बनाना (एक बार, owner):**
+1. दुकान के एक कंप्यूटर पर BillTrix Desktop खोलें → owner से login (इंटरनेट के साथ)
+2. नीचे plan वाले डिब्बे में **"🏠 Shop Hub…"** → **Make this computer the Hub**
+3. Windows पूछे "Allow access?" → **Allow** (Private network)
+4. Hub अपना पता दिखाएगा, जैसे `http://192.168.1.20:18300`
+
+**Counter जोड़ना:**
+- **BillTrix Desktop वाले counter:** 🏠 → "Connect to the shop Hub" → पता लिखें (`192.168.1.20`) → **Connect** → एक बार login
+- **फ़ोन/दूसरे browser:** उसी Wi-Fi पर `http://192.168.1.20:18300` खोलें
+
+**कैसे चलता है:**
+- सारे बिल और stock **Hub पर** — सब counters एक जैसा देखते हैं, **इंटरनेट न हो तब भी**
+- इंटरनेट आते ही Hub सब कुछ cloud पर भेजता है (हर 5 सेकंड जाँच), और दूसरी जगह (mobile app, दूसरी branch) के बदलाव ले आता है
+- कोई user Hub पर **बिना इंटरनेट** login तभी कर सकता है जब उसने **एक बार इंटरनेट के साथ Hub से login** किया हो
+- बिना इंटरनेट: WhatsApp भेजना, Voice (Whisper), नए users/passwords — **इंटरनेट आने पर**
+- Hub कंप्यूटर दुकान खुलने के समय **चालू रखें**
+
+**Hub बंद करना:** Hub कंप्यूटर पर 🏠 → **Stop being the shop Hub** (पहले इंटरनेट जोड़ें ताकि सब cloud पहुँच जाए)
