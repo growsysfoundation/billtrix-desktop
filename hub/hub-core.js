@@ -24,6 +24,7 @@ class HubStore {
     this.out = { dirty: new Set(), dels: new Set(), delta: {} };   // not yet in the cloud
     this.inflight = null;                       // what the last unanswered upload carried
     this.cloudRev = 0;                          // last cloud revision we have
+    this.colls = new Set();                     // every list the shop has (also empty ones, like the cloud sends)
     this.journal = null;
     if (dir) this._load();
   }
@@ -33,12 +34,13 @@ class HubStore {
   _state() {
     return { tenantId: this.tenantId, rev: this.rev, seq: this.seq, cloudRev: this.cloudRev, inflight: this.inflight,
       out: { dirty: [...this.out.dirty], dels: [...this.out.dels], delta: this.out.delta },
-      recs: [...this.recs.values()] };
+      recs: [...this.recs.values()], colls: [...this.colls] };
   }
   _restore(s) {
     this.tenantId = s.tenantId || this.tenantId; this.rev = s.rev || 0; this.seq = s.seq || 0; this.cloudRev = s.cloudRev || 0; this.inflight = s.inflight || null;
     this.out = { dirty: new Set(s.out?.dirty || []), dels: new Set(s.out?.dels || []), delta: s.out?.delta || {} };
     this.recs = new Map((s.recs || []).map((r) => [key(r.coll, r.rid), r]));
+    this.colls = new Set(s.colls || []);
   }
   _load() {
     fs.mkdirSync(this.dir, { recursive: true });
@@ -80,6 +82,7 @@ class HubStore {
   }
   doc() {
     const d = { attendance: {} };
+    for (const k of this.colls) d[k] = [];
     for (const r of [...this.recs.values()].filter((x) => !x.deleted).sort((a, b) => a.seq - b.seq)) {
       const v = JSON.parse(r.data); if (r.coll === 'users') delete v.passHash;
       if (r.coll === '_meta') d[r.rid] = v; else if (r.coll === 'attendance') d.attendance[r.rid] = v; else (d[r.coll] ||= []).push(v);
@@ -228,7 +231,7 @@ class HubStore {
   }
   /** First start: take the whole shop from the cloud. */
   seedFromCloud(doc, cloudRev) {
-    this.recs = new Map(); this.rev = 1; this.seq = 0; this.out = { dirty: new Set(), dels: new Set(), delta: {} }; this.inflight = null;
+    this.recs = new Map(); this.rev = 1; this.seq = 0; this.colls = new Set(Object.keys(doc).filter((k) => Array.isArray(doc[k]))); this.out = { dirty: new Set(), dels: new Set(), delta: {} }; this.inflight = null;
     for (const [k, v] of Object.entries(doc)) {
       if (Array.isArray(v)) { const items = k === 'audit' ? [...v].reverse() : v; for (const x of items) if (x && typeof x === 'object' && x.id != null) this.recs.set(key(k, String(x.id)), { coll: k, rid: String(x.id), data: JSON.stringify(x), deleted: 0, rev: 1, seq: ++this.seq }); }
       else if (k === 'attendance' && v && typeof v === 'object') { for (const [d, m] of Object.entries(v)) this.recs.set(key('attendance', d), { coll: 'attendance', rid: d, data: JSON.stringify(m), deleted: 0, rev: 1, seq: ++this.seq }); }
