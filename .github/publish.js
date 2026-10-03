@@ -13,7 +13,7 @@ async function identity() {
   return j.value;
 }
 async function upload(name, buf) {
-  const cs = 900 * 1024, total = Math.ceil(buf.length / cs);
+  const cs = 16 * 1048576, total = Math.ceil(buf.length / cs);
   let tok = await identity(), at = Date.now();
   for (let i = 0; i < total; i++) {
     if (Date.now() - at > 4 * 60 * 1000) { tok = await identity(); at = Date.now(); }
