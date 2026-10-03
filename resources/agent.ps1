@@ -40,8 +40,10 @@ while ($true) {
     $all = $ms.ToArray(); $head = [Text.Encoding]::ASCII.GetString($all, 0, $end); $lines = $head -split "`r`n"
     $req = $lines[0] -split ' '; $method = $req[0]; $path = $req[1]; $len = 0; $origin = ''
     foreach ($l in $lines) { if ($l -match '^(?i)content-length:\s*(\d+)') { $len = [int]$matches[1] }; if ($l -match '^(?i)origin:\s*(.+)$') { $origin = $matches[1].Trim() } }
-    if ($origin -and $origin -ne $Allowed) { Reply $s '403 Forbidden' '{"ok":false,"error":"not allowed"}' $Allowed; continue }
-    $ao = $Allowed
+    # the cloud address, or the shop's own BillTrix Hub on the local network (port 18300)
+    $okOrigin = (-not $origin) -or ($origin -eq $Allowed) -or ($origin -match '^http://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):18300$')
+    if (-not $okOrigin) { Reply $s '403 Forbidden' '{"ok":false,"error":"not allowed"}' $Allowed; continue }
+    $ao = if ($origin) { $origin } else { $Allowed }
     if ($method -eq 'OPTIONS') { Reply $s '204 No Content' '' $ao; continue }
     $body = New-Object byte[] $len; $have = $all.Length - ($end + 4); if ($have -gt 0) { [Array]::Copy($all, $end + 4, $body, 0, [Math]::Min($have, $len)) }
     while ($have -lt $len) { $n = $s.Read($body, $have, $len - $have); if ($n -le 0) { break }; $have += $n }
