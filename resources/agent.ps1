@@ -1,6 +1,7 @@
 # BillTrix Print Agent - sends label printer files (PRN) straight to a Windows printer. Listens only on this computer.
 $ErrorActionPreference = 'SilentlyContinue'
-$Allowed = 'https://billone.upendrakumar-raj.workers.dev'
+# web pages allowed to print through this agent (billtrix.in and the old cloud address); the shop Hub on the LAN is allowed below
+$Allowed = @('https://billtrix.in', 'https://www.billtrix.in', 'https://billone.upendrakumar-raj.workers.dev')
 $Port = 18181
 Add-Type -AssemblyName System.Drawing
 Add-Type -TypeDefinition @'
@@ -41,9 +42,10 @@ while ($true) {
     $req = $lines[0] -split ' '; $method = $req[0]; $path = $req[1]; $len = 0; $origin = ''
     foreach ($l in $lines) { if ($l -match '^(?i)content-length:\s*(\d+)') { $len = [int]$matches[1] }; if ($l -match '^(?i)origin:\s*(.+)$') { $origin = $matches[1].Trim() } }
     # the cloud address, or the shop's own BillTrix Hub on the local network (port 18300)
-    $okOrigin = (-not $origin) -or ($origin -eq $Allowed) -or ($origin -match '^http://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):18300$')
-    if (-not $okOrigin) { Reply $s '403 Forbidden' '{"ok":false,"error":"not allowed"}' $Allowed; continue }
-    $ao = if ($origin) { $origin } else { $Allowed }
+    # no Origin header (not a web page) may only ask /status; any other web page is refused
+    $okOrigin = ((-not $origin) -and ($path -like '/status*')) -or ($Allowed -contains $origin) -or ($origin -match '^http://(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):18300$')
+    if (-not $okOrigin) { Reply $s '403 Forbidden' '{"ok":false,"error":"not allowed"}' $Allowed[0]; continue }
+    $ao = if ($origin) { $origin } else { $Allowed[0] }
     if ($method -eq 'OPTIONS') { Reply $s '204 No Content' '' $ao; continue }
     $body = New-Object byte[] $len; $have = $all.Length - ($end + 4); if ($have -gt 0) { [Array]::Copy($all, $end + 4, $body, 0, [Math]::Min($have, $len)) }
     while ($have -lt $len) { $n = $s.Read($body, $have, $len - $have); if ($n -le 0) { break }; $have += $n }
