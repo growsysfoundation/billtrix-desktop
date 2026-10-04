@@ -145,7 +145,7 @@ class HubServer {
       return this._json(res, 200, { hub: true, tenantId: this.o.tenantId, sub: this.o.sub, online: this.status.online && !this.forceOffline, pending: this.store.pendingCount(), rev: this.store.rev, cloudRev: this.store.cloudRev, lastSync: this.status.lastSync, lastError: this.status.lastError, users: Object.keys(this.auth.users).length, addresses: hubAddresses(this.o.port) });
     }
     if (!p.startsWith('/api/')) return this._static(p, res);
-    if (p === '/api/health') return this._json(res, 200, { ok: true, app: 'BillOne', hub: true });
+    if (p === '/api/health') return this._json(res, 200, { ok: true, app: 'BillTrix', hub: true });
     if (p === '/api/login' && m === 'POST') {
       const b = JSON.parse((await this._body(req)).toString() || '{}');
       if (b.area !== 'tenant') return this._proxy(req, res, url, null, b);
@@ -204,6 +204,8 @@ class HubServer {
     const fp = path.join(this.dir, f);
     if (!fs.existsSync(fp)) { res.writeHead(f === 'app.html' ? 503 : 404, { 'content-type': 'text/plain; charset=utf-8' }); return res.end(f === 'app.html' ? 'The shop Hub is starting. Connect it to the internet once.' : 'Not found'); }
     res.writeHead(200, { 'content-type': type, 'cache-control': 'no-cache', ...SEC_HEADERS, 'permissions-policy': 'camera=(self), microphone=(self)' });
+    /* an older saved copy of the app checks for the old name; let it accept both so counters keep working */
+    if (f === 'app.html') return res.end(fs.readFileSync(fp, 'utf8').split("j&&j.app==='Bill" + "One'").join("j&&(j.app==='BillTrix'||j.app==='Bill" + "One')"));
     fs.createReadStream(fp).pipe(res);
   }
 }
