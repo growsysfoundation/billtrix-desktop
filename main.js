@@ -6,6 +6,9 @@ const { spawn } = require('child_process');
 
 const APP_NAME = 'BillTrix';
 const DEFAULT_URL = 'https://billone.upendrakumar-raj.workers.dev';
+/* 1.0.5: two addresses — if one cannot be reached, the other is tried before the offline page */
+const ALT_URLS = ['https://billone.upendrakumar-raj.workers.dev', 'https://billtrix.in'];
+let triedAlt = false;
 const AGENT_PORT = 18181;
 const HUB_PORT = 18300;
 const { HubServer } = require('./hub/hub-server');
@@ -17,7 +20,7 @@ function writeCfg(c) { try { fs.writeFileSync(CFG_FILE(), JSON.stringify(c, null
 const cfg = () => ({ url: DEFAULT_URL, zoom: 0, ...readCfg() });
 const appOrigin = () => new URL(cfg().url).origin;
 const cloudUrl = () => (cfg().cloud || DEFAULT_URL);
-const okOrigins = () => new Set([appOrigin(), new URL(cloudUrl()).origin, `http://localhost:${HUB_PORT}`, `http://127.0.0.1:${HUB_PORT}`]);
+const okOrigins = () => new Set([appOrigin(), new URL(cloudUrl()).origin, ...ALT_URLS.map((u) => new URL(u).origin), `http://localhost:${HUB_PORT}`, `http://127.0.0.1:${HUB_PORT}`]);
 
 /* ---------- one window only ---------- */
 if (!app.requestSingleInstanceLock()) { app.quit(); }
@@ -127,7 +130,8 @@ function createWindow() {
   wc.on('will-navigate', (e, url) => { if (!inside(url) && !url.startsWith('file:')) { e.preventDefault(); shell.openExternal(url); } });
 
   /* no internet and no saved copy yet → friendly page with “Try again” */
-  wc.on('did-fail-load', (_e, code, _desc, url, isMain) => { if (isMain && code !== -3 && !String(url).startsWith('file:')) win.loadFile(offlinePage()); });
+  wc.on('did-fail-load', (_e, code, _desc, url, isMain) => { if (isMain && code !== -3 && !String(url).startsWith('file:')) { let cur = ''; try { cur = new URL(url).origin; } catch {} const alt = ALT_URLS.find((u) => new URL(u).origin !== cur); if (!hub && !triedAlt && alt) { triedAlt = true; win.loadURL(alt + '/?source=desktop'); return; } win.loadFile(offlinePage()); } });
+  wc.on('did-finish-load', () => { if (!String(wc.getURL()).startsWith('file:')) triedAlt = false; });
   wc.on('zoom-changed', () => setTimeout(() => writeCfg({ ...readCfg(), zoom: wc.getZoomLevel() }), 50));
 
   win.loadURL(startUrl());
@@ -191,6 +195,6 @@ app.whenReady().then(async () => {
   createWindow();
   autoUpdate();
 });
-ipcMain.handle('bt:retry', () => { if (win) win.loadURL(startUrl()); });
+ipcMain.handle('bt:retry', () => { triedAlt = false; if (win) win.loadURL(startUrl()); });
 app.on('window-all-closed', async () => { stopAgent(); await hubStop().catch(() => {}); app.quit(); });
 app.on('before-quit', stopAgent);
