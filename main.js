@@ -101,7 +101,7 @@ ipcMain.handle('bt:set-server', async (_e, u) => {
     if (!/^https?:$/.test(url.protocol)) throw new Error('Bad address');
     const r = await net.fetch(url.origin + '/api/health');
     const j = await r.json();
-    if (!j || j.app !== 'BillOne') throw new Error('No BillTrix at this address');
+    if (!j || (j.app !== 'BillTrix' && j.app !== 'Bill' + 'One')) throw new Error('No BillTrix at this address');
     writeCfg({ ...readCfg(), url: url.origin });
     setTimeout(() => win && win.loadURL(startUrl()), 300);
     return { ok: true, hub: !!j.hub };
